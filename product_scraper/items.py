@@ -28,6 +28,9 @@ class ProductItem(scrapy.Item):
     sku = scrapy.Field()
     upc = scrapy.Field()
     price = scrapy.Field()
+    retail_price = scrapy.Field()
+    price_unit = scrapy.Field()
+    package_qty = scrapy.Field()
     availability = scrapy.Field()
 
     brand = scrapy.Field()
