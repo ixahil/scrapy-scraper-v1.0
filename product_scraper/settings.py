@@ -8,8 +8,8 @@
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 import logging
 
-# LOG_LEVEL = "ERROR"
-# LOG_SHORT_NAMES = True  # shorter prefixes if any logs do appear
+LOG_LEVEL = "ERROR"
+LOG_SHORT_NAMES = True  # shorter prefixes if any logs do appear
 # LOG_LEVEL = 'DEBUG'
 
 # logging.getLogger("scrapy").setLevel(logging.ERROR)

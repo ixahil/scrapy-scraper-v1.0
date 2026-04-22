@@ -1,3 +1,4 @@
+from tokenize import String
 import scrapy
 import pandas as pd
 import json
@@ -129,7 +130,7 @@ class ZoroSpider(scrapy.Spider):
             item["brand"] = product.get("brand", "")
             item["sku"] = product.get("mfrNo", "")
             item["upc"] = product.get("upc")
-          
+            item["zoro"] = product.get("zoroNo")
 
             item["price"] = product.get("price")
             item["retail_price"] = product.get("originalPrice")
@@ -142,30 +143,115 @@ class ZoroSpider(scrapy.Spider):
             )
   
             attributes = product.get("attributes", [])
-            item["custom_fields"], item["description"] = self._build_fields_and_description(
-                attributes
-            )
+            item["custom_fields"] = self._build_custom_fields(attributes)
+
+            resource_files = [
+                media_item for media_item in product.get("media", [])
+                if not media_item.get("type", "").lower().startswith("image/")
+            ]
+
+            resources = []
+            base_path = "https://www.zoro.com/static/cms/enhanced_pdf/" 
+
+            for idx, file in enumerate(resource_files, start=1):
+                name = file.get("name", "")
+                file_type = file.get("type", "")
+
+                resources.append({
+                    "title": f"Technical Guide {idx}",
+                    "href": f"{base_path}{name}",
+                    "type": file_type
+                })
+
+            item["resources"] = resources
+
+            item["description"] = self._build_complete_description(attributes, product.get("description"))
  
             item["images"] = self._extract_images(product.get("media", []))
  
-            title = item["title"]
-            item["page_title"] = product.get(
-                "SEOTitleTag", f"{title} | Genesee Supply Co." if title else ""
-            )
-            item["meta_description"] = product.get("SEOMetaDescription", "")
+            
+            item["page_title"] = product.get("SEOTitleTag", f"{item['title']} | Genesee Supply Co")
+            
+            item["meta_description"] = product.get("SEOMetaDescription")
             item["product_url"] = f"/{product.get('slug') or item['sku'] or ''}"
             keywords = item["category"].replace(" > ", ",")
             item["search_keywords"] = keywords
             item["meta_keywords"] = keywords
  
-            item["resources"] = []
             item["variants"] = []
+
+            item["supplier"] = product.get("supplier")
+            item["lead_time"] = product.get("leadTime")
+
  
             yield item
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _build_complete_description(self, attributes: list, description):
+        html = ""
+
+        # 1. Description
+        if description:
+            html += f"<div class='product-description'>{description}</div>"
+
+        # 2. Spec table
+        specs_tb = self._buid_spec_table(attributes)
+        html += specs_tb
+
+        # # 3. Resources (PDFs)
+        # if rsource_files:
+        #     resource_items = ""
+
+        #     for idx, file in enumerate(rsource_files, start=1):
+        #         name = file.get("name", "Resource File")
+        #         type = file.get("type", "application/pdf")
+        #         href = f"/https://www.zoro.com/static/cms/enhanced_pdf/{name}"  # adjust if your base path differs
+
+        #         resource_items += f"""
+        #         <li class="description-product-spec-link-pdf__row" index="{idx}">
+        #             <div class="description-product-spec-link-pdf__first-column">
+        #                 <div class="description-product-spec-link-pdf__icon-contain">
+        #                     <a class="description-product-spec-link-pdf__icon-link" href="{href}" rel="noopener noreferrer" target="_blank">
+        #                         <span class="description-product-spec-link-pdf__icon" data-type="{type}"></span>
+        #                         <span class="sr-only">opens in a new tab</span>
+        #                     </a>
+        #                 </div>
+        #                 <div class="description-product-spec-link-pdf__title-contain">
+        #                     <h2 class="description-product-spec-link-pdf__title">
+        #                         <a href="{href}" rel="noopener noreferrer" target="_blank">
+        #                             {name}
+        #                             <span class="sr-only">opens in a new tab</span>
+        #                         </a>
+        #                     </h2>
+        #                 </div>
+        #             </div>
+        #             <div class="description-product-spec-link-pdf__second-column">
+        #                 <div class="description-product-spec-link-pdf__contain">
+        #                     <a class="description-product-spec-link-pdf" href="{href}" target="_blank" title="Click here to download {name}">
+        #                         View
+        #                         <span class="sr-only">opens in a new tab</span>
+        #                     </a>
+        #                 </div>
+        #             </div>
+        #         </li>
+        #         """
+
+        #     resources_html = f"""
+        #     <div class="cmp-container description-resource" id="description-resource">
+        #         <h6>Resources</h6>
+        #         <ul class="description-product-spec-link-pdf__row-contain">
+        #             {resource_items}
+        #         </ul>
+        #     </div>
+        #     """
+
+        #     html += resources_html
+
+        return html.strip()
+
 
     def _map_availability(self, sales_status: str) -> str:
         mapping = {
@@ -177,137 +263,152 @@ class ZoroSpider(scrapy.Spider):
         return mapping.get(sales_status.upper(), sales_status)
 
     def _extract_images(self, media: list) -> list:
-        image_types = {"image", "img", "photo", "primary_image"}
         images = []
+
         for m in media:
             m_type = (m.get("type") or "").lower()
             name = (m.get("name") or "").strip()
-            if name and (not m_type or m_type in image_types):
-                images.append(name)
-        return 
-        
-    def _build_custom_fields(self, attributes:list):
+
+            # keep only actual images
+            if name and m_type.startswith("image/"):
+                url = f"https://www.zoro.com/static/cms/product/large/{name}"
+
+                images.append(url)
+
+        return images
+
+    def _build_custom_fields(self, attributes: list):
         custom_fields = []
-        
 
-    def _build_fields_and_description(self, attributes: list):
-        """
-        Maps Zoro attributes array to:
-          - custom_fields: list of {name, value} (max 250 chars value)
-          - description: HTML string
-        """
-        custom_fields = []
-        desc_parts = []
-        spec_rows = []
+        # keep only attributes that have 'rank'
+        ranked_attrs = [attr for attr in attributes if "rank" in attr]
 
-        sorted_attrs = sorted(attributes, key=lambda x: x.get("rank", 0))
+        # sort by rank
+        sorted_attrs = sorted(ranked_attrs, key=lambda x: x["rank"])
 
-        for attr in sorted_attrs:
+        # take only first 10
+        top_attrs = sorted_attrs[:10]
+
+        for attr in top_attrs:
             name = (attr.get("name") or "").strip()
             value = (attr.get("value") or "").strip()
-            if not name or not value:
-                continue
 
-            # Extract long description into description field
-            if name.lower() in ("description", "product description", "long description"):
-                desc_parts.append(
-                    f'<p class="product-long-description">{value}</p>'
-                )
+            if name and value and len(value) <= 250:
+                custom_fields.append({
+                    "name": name,
+                    "value": value
+                })
 
-            # All attributes → spec table
-            spec_rows.append(
-                f"<tr><td><b>{name}</b></td><td>{value}</td></tr>"
-            )
+        return custom_fields
 
-            # Custom fields (truncated to 250 chars)
-            if len(value) <= 250:
-                custom_fields.append({"name": name, "value": value})
+    def _buid_spec_table(self, attributes: list):
+        MAX_HTML_LEN = 20000
 
-        if spec_rows:
-            rows_html = "".join(spec_rows)
-            spec_table = (
-                f'<table class="spec-table table"><tbody>{rows_html}</tbody></table>'
-            )
-            desc_parts.append(
-                f'<div class="cmp-container" id="description-technical">{spec_table}</div>'
-            )
+        rows = ""
+        current_len = 0
 
-        return custom_fields, "".join(desc_parts)
+        sorted_attrs = sorted(attributes, key=lambda x: x.get("rank", 9999))
 
-    def _build_variants(self, products: list) -> list:
-        """
-        Build a list of variant dicts from the products array.
-        Each product in the array represents one variant.
-        Only returns variants when there are 2+ distinct products.
+        i = 0
+        while i < len(sorted_attrs):
+            cols = ""
 
-        Each variant dict:
-            {
-                "sku": str,
-                "price": float | None,
-                "options": [{"name": str, "value": str}, ...],
-                "image_url": str,
-            }
-        """
-        if len(products) <= 1:
-            return []
+            # first valid attribute
+            name1 = value1 = ""
+            while i < len(sorted_attrs):
+                attr1 = sorted_attrs[i]
+                i += 1
 
-        variants = []
-        for product in products:
-            variant_sku = product.get("mfrNo") or product.get("zoroNo") or product.get("erpId", "")
-            variant_price = product.get("price")
+                name1 = (attr1.get("name") or "").strip()
+                value1 = (attr1.get("value") or "").strip()
 
-            # Build options from variantAttributes (each item describes THIS variant's options)
-            options = self._extract_variant_options(
-                product.get("variantAttributes", []),
-                product.get("variantLabel", ""),
-            )
+                if name1 and value1:
+                    break
 
-            # Variant-level image (first image from this variant's media)
-            variant_images = self._extract_images(product.get("media", []))
-            variant_image = variant_images[0] if variant_images else ""
+            if not name1 or not value1:
+                break
 
-            variants.append({
-                "sku": variant_sku,
-                "price": variant_price,
-                "options": options,
-                "image_url": variant_image,
-            })
+            cols += f"<td>{name1}</td><td>{value1}</td>"
 
-        return variants
+            # second valid attribute
+            name2 = value2 = ""
+            while i < len(sorted_attrs):
+                attr2 = sorted_attrs[i]
+                i += 1
 
-    def _extract_variant_options(self, variant_attributes: list, variant_label: str) -> list:
-        """
-        Converts variantAttributes into a list of {name, value} option dicts.
+                name2 = (attr2.get("name") or "").strip()
+                value2 = (attr2.get("value") or "").strip()
 
-        variantAttributes can be:
-          - list of {name, value, ...} dicts  →  use directly
-          - list of arbitrary dicts with unknown keys  →  map key → value
-        Falls back to variantLabel if empty.
-        """
-        options = []
+                if name2 and value2:
+                    break
 
-        for va in variant_attributes:
-            if not isinstance(va, dict):
-                continue
-
-            name = (va.get("name") or va.get("label") or "").strip()
-            value = (va.get("value") or va.get("displayValue") or "").strip()
-
-            if name and value:
-                options.append({"name": name, "value": value})
+            if name2 and value2:
+                cols += f"<td>{name2}</td><td>{value2}</td>"
             else:
-                # Generic key→value mapping, skip internal/id fields
-                skip_keys = {
-                    "name", "value", "rank", "normalizedValue",
-                    "mfrNo", "sku", "zoroNo", "erpId", "price",
-                    "salesStatus", "media", "leadTime",
-                }
-                for k, v in va.items():
-                    if k in skip_keys:
-                        continue
-                    if isinstance(v, str) and v.strip():
-                        label = variant_label if variant_label else k
-                        options.append({"name": label, "value": v.strip()})
-                        break  # one option per attribute object
+                cols += "<td></td><td></td>"
 
-        return options
+            row = f"<tr>{cols}</tr>"
+
+            if current_len + len(row) > MAX_HTML_LEN:
+                break
+
+            rows += row
+            current_len += len(row)
+
+        html = f"""
+        <div class="cmp-container" id="description-technical">
+            <div id="spectable">
+                <h6>Product Specifications</h6>
+                <table class="spec-table table" cellspacing="0" width="95%" bgcolor="#fff">
+                    <tbody>
+                        {rows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        """
+
+        return html.strip()
+    # def _build_fields_and_description(self, attributes: list):
+    #     """
+    #     Maps Zoro attributes array to:
+    #       - custom_fields: list of {name, value} (max 250 chars value)
+    #       - description: HTML string
+    #     """
+    #     custom_fields = []
+    #     desc_parts = []
+    #     spec_rows = []
+
+    #     sorted_attrs = sorted(attributes, key=lambda x: x.get("rank", 0))
+
+    #     for attr in sorted_attrs:
+    #         name = (attr.get("name") or "").strip()
+    #         value = (attr.get("value") or "").strip()
+    #         if not name or not value:
+    #             continue
+
+    #         # Extract long description into description field
+    #         if name.lower() in ("description", "product description", "long description"):
+    #             desc_parts.append(
+    #                 f'<p class="product-long-description">{value}</p>'
+    #             )
+
+    #         # All attributes → spec table
+    #         spec_rows.append(
+    #             f"<tr><td><b>{name}</b></td><td>{value}</td></tr>"
+    #         )
+
+    #         # Custom fields (truncated to 250 chars)
+    #         if len(value) <= 250:
+    #             custom_fields.append({"name": name, "value": value})
+
+    #     if spec_rows:
+    #         rows_html = "".join(spec_rows)
+    #         spec_table = (
+    #             f'<table class="spec-table table"><tbody>{rows_html}</tbody></table>'
+    #         )
+    #         desc_parts.append(
+    #             f'<div class="cmp-container" id="description-technical">{spec_table}</div>'
+    #         )
+
+    #     return custom_fields, "".join(desc_parts)

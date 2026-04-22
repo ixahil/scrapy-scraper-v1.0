@@ -6,6 +6,8 @@ import re
 from tqdm import tqdm
 import logging
 from urllib.parse import urlparse
+import requests
+
 
 # logging.getLogger("scrapy").setLevel(logging.ERROR)
 # logging.getLogger("scrapy-playwright").setLevel(logging.ERROR)
@@ -211,7 +213,7 @@ def format_bc_options(options: list) -> str:
     return " || ".join(parts)
 
 COLUMNS = [
-    "Status", "URL", "Item", "Name", "Type", "SKU", "Options",
+    "Status", "URL", "#Zoro","Supplier","Lead Time", "Item", "Name", "Type", "SKU", "Options",
     "Inventory Tracking", "Current Stock", "Low Stock", "Price",
     "Cost Price", "Retail Price", "Sale Price", "Brand ID", "Channels",
     "Categories Names","Categories", "Description", "Custom Fields", "Availability",
@@ -233,6 +235,9 @@ MAX_FILE_BYTES = 19 * 1024 * 1024  # 20 MB
 
 
 class BigcommercePipeline:
+
+    def _should_rotate(self):
+        return os.path.getsize(self.output_path) >= MAX_FILE_BYTES
 
     def _make_output_path(self, index: int) -> str:
         suffix = f"-part{index}" if index > 1 else ""
@@ -272,41 +277,61 @@ class BigcommercePipeline:
         full_row = {col: row.get(col, "") for col in COLUMNS}
         self.writer.writerow(full_row)
         self.csv_file.flush()
-        # Rotate if 20 MB reached
-        if os.path.getsize(self.output_path) >= MAX_FILE_BYTES:
-            self.csv_file.close()
-            self._file_index += 1
-            self._open_csv(self._file_index)
+        # # Rotate if 20 MB reached
+        # if os.path.getsize(self.output_path) >= MAX_FILE_BYTES:
+        #     self.csv_file.close()
+        #     self._file_index += 1
+        #     self._open_csv(self._file_index)
 
     def get_resources_block(self, item):
+        MAX_LEN = 32000
+        BUFFER = 2000
+        MAX_ALLOWED = MAX_LEN - BUFFER  # 30000
+
+        desc_len = len(item.get("description", ""))
+        wrapper_overhead = len("<div></div>")  # 11 chars
+
+        budget = MAX_ALLOWED - desc_len - wrapper_overhead
+        if budget <= 0:
+            return ""
+
         resources = item.get("resources", [])
         rows = []
+        used = 0
+
         for idx, res in enumerate(resources, start=1):
             href = res.get("href", "")
-            title = res.get("title", "Resource")
+            title = res.get("title", "Technical Guide")
+            type_ = res.get("type", "application/pdf")
+
             row = f'''<li class="description-product-spec-link-pdf__row" index="{idx}">
-                    <div class="description-product-spec-link-pdf__first-column">
-                        <div class="description-product-spec-link-pdf__icon-contain">
-                        <a class="description-product-spec-link-pdf__icon-link" href="{href}" rel="noopener noreferrer" target="_blank">
-                            <span class="description-product-spec-link-pdf__icon" data-type="application/pdf"></span>
-                            <span class="sr-only">opens in a new tab</span>
-                        </a>
-                        </div>
-                        <div class="description-product-spec-link-pdf__title-contain">
-                        <h2 class="description-product-spec-link-pdf__title">
-                            <a href="{href}" rel="noopener noreferrer" target="_blank">{title}<span class="sr-only">opens in a new tab</span></a>
-                        </h2>
-                        </div>
-                    </div>
-                    <div class="description-product-spec-link-pdf__second-column">
-                        <div class="description-product-spec-link-pdf__contain">
-                        <a class="description-product-spec-link-pdf" href="{href}" target="_blank" title="Click here to download {title}">
-                            View<span class="sr-only">opens in a new tab</span>
-                        </a>
-                        </div>
-                    </div>
-                    </li>'''.strip()
+            <div class="description-product-spec-link-pdf__first-column">
+                <div class="description-product-spec-link-pdf__icon-contain">
+                <a class="description-product-spec-link-pdf__icon-link" href="{href}" rel="noopener noreferrer" target="_blank">
+                    <span class="description-product-spec-link-pdf__icon" data-type="{type_}"></span>
+                    <span class="sr-only">opens in a new tab</span>
+                </a>
+                </div>
+                <div class="description-product-spec-link-pdf__title-contain">
+                <h2 class="description-product-spec-link-pdf__title">
+                    <a href="{href}" rel="noopener noreferrer" target="_blank">{title}<span class="sr-only">opens in a new tab</span></a>
+                </h2>
+                </div>
+            </div>
+            <div class="description-product-spec-link-pdf__second-column">
+                <div class="description-product-spec-link-pdf__contain">
+                <a class="description-product-spec-link-pdf" href="{href}" target="_blank" title="Click here to download {title}">
+                    View<span class="sr-only">opens in a new tab</span>
+                </a>
+                </div>
+            </div>
+            </li>'''.strip()
+
+            if used + len(row) > budget:
+                break
+
             rows.append(row)
+            used += len(row)
 
         if not rows:
             return ""
@@ -320,16 +345,21 @@ class BigcommercePipeline:
         )
 
     def process_item(self, item, spider):
+         # 🔥 Rotate BEFORE writing a new product
+        if self._should_rotate():
+            self.csv_file.close()
+            self._file_index += 1
+            self._open_csv(self._file_index)
         images = item.get("images", [])
         variants = item.get("variants", [])
         custom_fields = item.get("custom_fields", [])
 
         for idx, res in enumerate(item.get("resources", []), start=1):
             href = res.get("href", "")
-            title = res.get("title", "Resource")
-            value = f"<a href='{href}' target='_blank'>{title}</a>"
+            title = res.get("title", "Technical Guide")
+            value = f"<a href='{href}' target='_blank'>Download Here</a>"
             if len(value) <= 255:
-                custom_fields.append({"name": f"Resource {idx}", "value": value})
+                custom_fields.append({"name": f"{title}", "value": value})
 
         has_variants = len(variants) > 1
         custom_fields_str = json.dumps(custom_fields) if custom_fields else ""
@@ -362,7 +392,7 @@ class BigcommercePipeline:
             "Channels": 1,
             "Categories Names": item.get("category"),
             "Categories": "",
-            "Description": f'<div>{item.get("description", "")}{self.get_resources_block(item)}</div>',
+            "Description": f"</div>{item.get('description', "")} {self.get_resources_block(item)}</div>",
             "Custom Fields": custom_fields_str,
             "Availability": item.get("availability"),
             "Page Title": item.get("page_title", ""),
@@ -370,7 +400,7 @@ class BigcommercePipeline:
             "Meta Description": item.get("meta_description", ""),
             "Search Keywords": item.get("search_keywords", ""),
             "Meta Keywords": item.get("meta_keywords", ""),
-            "UPC/EAN": item.get("upc"),
+            "UPC/EAN": f'="{item.get("upc", "")}"',
             "Manufacturer Part Number": item.get("sku"),
             "Free Shipping": False,
             "Fixed Shipping Cost": 0,
@@ -382,6 +412,9 @@ class BigcommercePipeline:
             "Product Condition": "New",
             "Show Product Condition": False,
             "Sort Order": 0,
+            "Supplier": item.get("supplier"),
+            "Lead Time": item.get("lead_time"),
+            "#Zoro": item.get("zoro"),
         })
 
         for idx, img in enumerate(images, start=1):
@@ -389,7 +422,7 @@ class BigcommercePipeline:
                 "Status": "",
                 "Item": "Image",
                 "Image URL (Import)": img,
-                "Image Description": f"{item.get("title")} | Genesee Supply Co.",
+                "Image Description": f"{item.get('page_title')}-{idx}",
                 "Image is Thumbnail": idx == 1,
                 "Image Sort Order": idx,
             })
@@ -415,13 +448,26 @@ class BigcommercePipeline:
         print(f"\n✓ {self.success} success | ✗ {self.failed} failed | saved to {self._output_dir}/")
 
 
+
+
 class ResourceDownloadPipeline:
 
     def open_spider(self, spider):
         input_file = getattr(spider, "input_file", None)
         base_name = os.path.splitext(os.path.basename(input_file))[0] if input_file else "output"
-        self.download_dir = os.path.join("transformed-done-new", f"{base_name}-downloads")
-        os.makedirs(self.download_dir, exist_ok=True)
+
+        self.output_dir = "transformed-done-new"
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        # file for JDownloader
+        self.links_file_path = os.path.join(self.output_dir, f"{base_name}-download-links.txt")
+        self.links_file = open(self.links_file_path, "w", encoding="utf-8")
+
+        # avoid duplicates
+        self.seen_links = set()
+
+    def close_spider(self, spider):
+        self.links_file.close()
 
     def process_item(self, item, spider):
         resources = item.get("resources", [])
@@ -429,27 +475,84 @@ class ResourceDownloadPipeline:
             return item
 
         updated_resources = []
+
         for res in resources:
             href = res.get("href", "")
             if not href:
+                updated_resources.append(res)  # ✅ keep as-is, don't drop it
                 continue
 
             filename = os.path.basename(urlparse(href).path)
-            local_path = os.path.join(self.download_dir, filename)
 
-            try:
-                import urllib.request
-                urllib.request.urlretrieve(href, local_path)
-                cdn_url = f"/content/hoffman/{filename}"
-            except Exception as e:
-                spider.logger.error(f"Failed to download {href}: {e}")
-                cdn_url = href
+            if not filename:
+                updated_resources.append(res)  # ✅ keep as-is if URL has no filename
+                continue
 
+            if href not in self.seen_links:
+                self.links_file.write(href + "\n")
+                self.seen_links.add(href)
+
+            cdn_url = f"/content/tripp-lite/{filename}"
             updated_resources.append({**res, "href": cdn_url, "filename": filename})
 
-        item["resources"] = updated_resources
+        item["resources"] = updated_resources  # now never loses resources
         return item
 
+# class ResourceDownloadPipeline:
+
+#     def open_spider(self, spider):
+#         input_file = getattr(spider, "input_file", None)
+#         base_name = os.path.splitext(os.path.basename(input_file))[0] if input_file else "output"
+#         self.download_dir = os.path.join("transformed-done-new", f"{base_name}-downloads")
+#         os.makedirs(self.download_dir, exist_ok=True)
+
+#     def process_item(self, item, spider):
+#         resources = item.get("resources", [])
+#         if not resources:
+#             return item
+
+#         updated_resources = []
+
+#         # reuse session (important)
+#         session = requests.Session()
+#         session.headers.update({
+#             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+#             "Referer": "https://www.zoro.com/",
+#             "Accept": "application/pdf,*/*",
+#             "Connection": "keep-alive",
+#         })
+
+#         for res in resources:
+#             href = res.get("href", "")
+#             if not href:
+#                 continue
+
+#             filename = os.path.basename(urlparse(href).path)
+#             local_path = os.path.join(self.download_dir, filename)
+
+#             try:
+#                 r = session.get(href, timeout=30)
+
+#                 if r.status_code == 200:
+#                     with open(local_path, "wb") as f:
+#                         f.write(r.content)
+
+#                     cdn_url = f"/content/tripp-lite/{filename}"
+#                 else:
+#                     raise Exception(f"Status {r.status_code}")
+
+#             except Exception as e:
+#                 spider.logger.error(f"Failed to download {href}: {e}")
+#                 cdn_url = href
+
+#             updated_resources.append({
+#                 **res,
+#                 "href": cdn_url,
+#                 "filename": filename
+#             })
+
+#         item["resources"] = updated_resources
+#         return item
 
 # # import pandas as pd
 # # import os

@@ -51,3 +51,9 @@ class ProductItem(scrapy.Item):
     keywords = scrapy.Field()
     search_keywords = scrapy.Field()
     meta_keywords = scrapy.Field()
+
+    supplier = scrapy.Field()
+    lead_time = scrapy.Field()
+
+    zoro = scrapy.Field()
+
