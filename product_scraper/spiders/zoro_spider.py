@@ -57,8 +57,8 @@ class ZoroSpider(scrapy.Spider):
         df = pd.read_excel(self.input_file)
 
         # Support both "links" column name (same as existing spider) or first col
-        if "links" in df.columns:
-            urls = df["links"].dropna().tolist()
+        if "API URL" in df.columns:
+            urls = df["API URL"].dropna().tolist()
         else:
             urls = df.iloc[:, 0].dropna().tolist()
 
@@ -170,7 +170,13 @@ class ZoroSpider(scrapy.Spider):
             item["images"] = self._extract_images(product.get("media", []))
  
             
-            item["page_title"] = product.get("SEOTitleTag", f"{item['title']} | Genesee Supply Co")
+            seo_title = product.get("SEOTitleTag") or ""
+
+            # remove "| Zoro" (with optional spaces)
+            seo_title = re.sub(r"\s*\|\s*Zoro\s*$", "", seo_title, flags=re.IGNORECASE)
+
+            title = item.get("title") or ""
+            item["page_title"] = seo_title or title
             
             item["meta_description"] = product.get("SEOMetaDescription")
             item["product_url"] = f"/{product.get('slug') or item['sku'] or ''}"

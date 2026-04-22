@@ -395,7 +395,7 @@ class BigcommercePipeline:
             "Description": f"</div>{item.get('description', "")} {self.get_resources_block(item)}</div>",
             "Custom Fields": custom_fields_str,
             "Availability": item.get("availability"),
-            "Page Title": item.get("page_title", ""),
+            "Page Title": f'{item.get("page_title", "")} | Genesee Supply Co',
             "Product URL": item.get("product_url", ""),
             "Meta Description": item.get("meta_description", ""),
             "Search Keywords": item.get("search_keywords", ""),
