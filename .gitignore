@@ -1,5 +1,5 @@
 hoffman-categories.xlsx
-*.json
+store-cats.json
 *.csv
 transformed-done
 transformed-done-new

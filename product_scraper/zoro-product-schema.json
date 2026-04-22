@@ -1,0 +1,198 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Generated Schema",
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "isLTL": {
+          "type": "boolean"
+        },
+        "addToCartAgreement": {
+          "type": "null"
+        },
+        "brand": {
+          "type": "string"
+        },
+        "leadTime": {
+          "type": "integer"
+        },
+        "hasCommercialShippingRestriction": {
+          "type": "boolean"
+        },
+        "orderChannel": {
+          "type": "string"
+        },
+        "restrictedStates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "restrictedSaleItemCode": {
+          "type": "null"
+        },
+        "variantLabel": {
+          "type": "string"
+        },
+        "isDiscontinued": {
+          "type": "boolean"
+        },
+        "minRetailQty": {
+          "type": "integer"
+        },
+        "SEOTitleTag": {
+          "type": "string"
+        },
+        "isForcedOutOfStock": {
+          "type": "boolean"
+        },
+        "maxOrderQty": {
+          "type": "null"
+        },
+        "mfrNo": {
+          "type": "string"
+        },
+        "isDropShipDirect": {
+          "type": "boolean"
+        },
+        "originalPrice": {
+          "type": "integer"
+        },
+        "primaryCategoryPaths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "depth": {
+                "type": "null"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "name"
+            ]
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "countryOfOrigin": {
+          "type": "string"
+        },
+        "erpId": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number"
+        },
+        "SEOMetaDescription": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "normalizedValue": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "value",
+              "normalizedValue",
+              "rank"
+            ]
+          }
+        },
+        "zoroNo": {
+          "type": "string"
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ]
+          }
+        },
+        "salesStatus": {
+          "type": "string"
+        },
+        "variantAttributes": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "freightCost": {
+          "type": "null"
+        },
+        "priceUnit": {
+          "type": "string"
+        },
+        "packageQty": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "isLTL",
+        "brand",
+        "leadTime",
+        "hasCommercialShippingRestriction",
+        "orderChannel",
+        "restrictedStates",
+        "variantLabel",
+        "isDiscontinued",
+        "minRetailQty",
+        "SEOTitleTag",
+        "isForcedOutOfStock",
+        "mfrNo",
+        "isDropShipDirect",
+        "originalPrice",
+        "primaryCategoryPaths",
+        "title",
+        "slug",
+        "countryOfOrigin",
+        "erpId",
+        "price",
+        "SEOMetaDescription",
+        "attributes",
+        "zoroNo",
+        "media",
+        "salesStatus",
+        "variantAttributes",
+        "priceUnit",
+        "packageQty"
+      ]
+    }
+  }
